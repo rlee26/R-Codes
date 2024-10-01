@@ -1,13 +1,13 @@
-# *****Need to change code from 20 years 0s to 10 years>0. Also see lines 20 and 47
+# *****Need to change code from 20 years 0s to 10 years>0. 
+#Also see lines 20 and 47. Make sure site field type matches your data and if no data is 0 or NA in your data
 # Input examples ----------------------------------------------------------
 
 #workingDirectiory<-"M:/Shared drives/UGS_Wetlands/Projects/hydrologySpatialAnalysis/Summary Analysis/StatewideHUC8"
 #fileWithData<-"StatewideHUC8MaySeptMeanSurfaceWaterExtent1990to2019Hectares.csv"
-#numberMinimum<-20 #(number of years minus 10)
+#numberMinimum<-20 #(number of years minus 10)needs 10 years of data to run
 #startYear<-1990
 #endYear<-2019
 #resultsFileName<-"TestMKFunction.csv"
-
 
 MKAutocorrelation<-function(workingDirectiory,fileWithData,numberMinimum,startYear,endYear,resultsFileName){
 
