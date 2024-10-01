@@ -1,0 +1,148 @@
+# *****Need to change code from 20 years 0s to 10 years>0. Also see lines 20 and 47
+# Input examples ----------------------------------------------------------
+
+#workingDirectiory<-"M:/Shared drives/UGS_Wetlands/Projects/hydrologySpatialAnalysis/Summary Analysis/StatewideHUC8"
+#fileWithData<-"StatewideHUC8MaySeptMeanSurfaceWaterExtent1990to2019Hectares.csv"
+#numberMinimum<-20 #(number of years minus 10)
+#startYear<-1990
+#endYear<-2019
+#resultsFileName<-"TestMKFunction.csv"
+
+
+MKAutocorrelation<-function(workingDirectiory,fileWithData,numberMinimum,startYear,endYear,resultsFileName){
+
+  library(tidyverse)
+  library(lubridate)
+  library(Kendall)
+  library(modifiedmk)
+  library(lmtest)  
+  
+MKResultsTable= tibble(`siteName`=numeric(),#character(),
+                       `lagtype`=character(),
+                       `names(MKresults)`=character(),
+                       `MKresults`=numeric())
+
+setwd(workingDirectiory)
+
+readFileWithData<-read_csv(fileWithData)
+
+renamedFileWithData<-readFileWithData%>%
+  rename(Site=1)%>%
+  rename(Year=2)%>%
+  rename(Value=3)%>%
+  replace_na(list(Site=0))
+
+  #Get list of site names to run through loop
+listSites <-renamedFileWithData%>%
+  distinct(Site)
+siteNames <- pull(listSites,Site)
+
+for (siteName in siteNames){
+  print(siteName)
+  siteNumber <- gsub('_.*','',siteName)  
+  siteData <- renamedFileWithData%>%
+    filter(Site==siteNumber)
+  
+  
+  #These next two lines (and 128/129) need to be changed if NAs instead of 0s. "/MaySept ",siteName,"_MonthlyWaterOccurrence.csv"
+  #they check if there are enough values to run a Mann Kendall
+  #if (sum(is.na(siteData$Value))<numberMinimum){
+  if (sum(siteData$Value==0)<=numberMinimum){
+    lh <- ts(data=siteData$Value, start=startYear,end=endYear,#1990
+             frequency = 1)
+    
+    x=acf(lh, plot=F, lag.max=10)
+    #plot(acf(lh))
+    acfValues=x$acf
+    g=(1.96/sqrt(x$n.used))
+    negG=-(1.96/sqrt(x$n.used))
+    sum(acfValues>g)
+    #abline(h=(1.96/sqrt(x$n.used)), col="red")
+    #abline(h=-(1.96/sqrt(x$n.used)), col="red")
+    
+    #acf(lh)
+    #a=acf(lh,plot = F,lag.max = 10)
+    y=pacf(lh, plot=F, lag.max=10)
+    #plot(y)
+    y$acf
+    y$lag
+    #abline(h=(1.96/sqrt(y$n.used)), col="red")
+    #abline(h=-(1.96/sqrt(y$n.used)), col="red")
+    h=(1.96/sqrt(y$n.used))
+    #pacf(lh)
+    pacfValues = y$acf
+    autoList= tibble(
+      `autoLag`=numeric())
+    autoLag = NULL
+    #checks if autocorrelation in acf and which lag pacf says is causing it
+    if(sum(acfValues>g|acfValues<negG)>1&!is.na(sum(acfValues>g|acfValues<negG))){#
+      
+      for (i in 1:length(pacfValues)){
+        
+        if (pacfValues[i] > h){
+          autoLag = i
+          print(autoLag)
+          autoListAlmost = tibble(autoLag)
+        }
+        else {
+          autoLag = 0
+          print(autoLag)
+          autoListAlmost = tibble(autoLag)
+        }
+        autoList = bind_rows(autoList,autoListAlmost)
+        
+      }
+      autoListLags = autoList%>%
+        summarise(SumLag=sum(autoLag))/10
+      #mutate(Return= ifelse(autoLag == 1,"lag1",ifelse(autoLag>1,"multiple","other")))
+      #filter(autoLag>0)
+      print(autoListLags)
+      for (i in autoListLags){
+        if (i == .1){
+          MKresults=mmky1lag(c(lh))
+          lagtype= "lag1"
+          print("lag1")
+          
+        }
+        else if (i >.1){
+          MKresults=mmky(c(lh))
+          lagtype= "multiple lag"
+          print("multiple lag")
+        }
+        else {
+          MKresults =mkttest(c(lh))
+          lagtype= "no lag"
+          print("no lag")
+        }
+        #MKResultsTableAlmost = tibble(siteName, lagtype, names(MKresults),MKresults)
+        #MKResultsTable = bind_rows(MKResultsTable,MKResultsTableAlmost)
+      }
+      #print(MKResultsTable)
+    }else {MKresults =mkttest(c(lh))
+    lagtype= "no lag"
+    print("no lag")
+    
+    }
+    MKResultsTableAlmost = tibble(siteName, lagtype, names(MKresults),MKresults)
+    MKResultsTable = bind_rows(MKResultsTable,MKResultsTableAlmost) 
+    print(MKResultsTable)
+  }
+  #else if (sum(is.na(siteData$Value))>numberMinimum) {
+  else if  (sum(siteData$Value==0)>numberMinimum){
+    MKResultsTableAlmost = tibble(siteName, `lagtype`="NA", `names(MKresults)`="NAs",`MKresults`=0)
+    MKResultsTable = bind_rows(MKResultsTable,MKResultsTableAlmost)
+  }}
+#str(MKresults)
+#View(MKResultsTable)
+
+filteredMKResults <-MKResultsTable%>%
+  filter(str_detect(`names(MKresults)`,'P-value')|str_detect(`names(MKresults)`,'Tau')|`names(MKresults)`=="Sen's slope"|`names(MKresults)`=="NAs")%>%#str_detect(`names(MKresults)`,'Z-Value')|str_detect(`names(MKresults)`,'Zc')
+  pivot_wider(names_from = `names(MKresults)`,values_from = MKresults)%>%
+  mutate(`P-Value`=coalesce(`P-value`,`new P-value`))%>%
+     #mutate(`Z-value`=coalesce(`Z-Value`,`Corrected Zc`))%>%
+  select(siteName, lagtype,`P-Value`,`Sen's slope`,`Tau` )
+      #unite("`P-Value`",`P-value`:`new P-value`,sep = " ",na.rm=T, remove = F)
+
+write_csv(filteredMKResults,resultsFileName)
+return(filteredMKResults)
+}
